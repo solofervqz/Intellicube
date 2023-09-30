@@ -1,6 +1,5 @@
 package com.sarmale.arduinobtexample_v3;
 
-
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.bluetooth.BluetoothAdapter;
@@ -44,6 +43,8 @@ public class MainActivity extends AppCompatActivity {
     private final static int ERROR_READ = 0; // used in bluetooth handler to identify message update
     BluetoothDevice arduinoBTModule = null;
     UUID arduinoUUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"); //We declare a default UUID to create the global variable
+
+
     @RequiresApi(api = Build.VERSION_CODES.M)
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -52,6 +53,7 @@ public class MainActivity extends AppCompatActivity {
         //Intances of BT Manager and BT Adapter needed to work with BT in Android.
         BluetoothManager bluetoothManager = getSystemService(BluetoothManager.class);
         BluetoothAdapter bluetoothAdapter = bluetoothManager.getAdapter();
+
         //Intances of the Android UI elements that will will use during the execution of the APP
         TextView btReadings = findViewById(R.id.btReadings);
         TextView btDevices = findViewById(R.id.btDevices);
@@ -127,15 +129,36 @@ public class MainActivity extends AppCompatActivity {
                     //We also define control the thread management with
                     // subscribeOn:  the thread in which you want to execute the action
                     // observeOn: the thread in which you want to get the response
-                    connectToBTObservable.
-                            observeOn(AndroidSchedulers.mainThread()).
-                            subscribeOn(Schedulers.io()).
-                            subscribe(valueRead -> {
-                                //valueRead returned by the onNext() from the Observable
-                                btReadings.setText(valueRead);
-                                //We just scratched the surface with RxAndroid
-                            });
+                    if (ActivityCompat.checkSelfPermission(MainActivity.this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                        ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.BLUETOOTH_CONNECT}, REQUEST_ENABLE_BT);
+                    } else {
+                        // El permiso ya está otorgado, continuar con la conexión Bluetooth
+                        connectToBTObservable
+                                .observeOn(AndroidSchedulers.mainThread())
+                                .subscribeOn(Schedulers.io())
+                                .subscribe(valueRead -> {
+                                    btReadings.setText(valueRead);
+                                    // Ahora procesa los datos para extraer la temperatura y la humedad
+                                    String receivedData = valueRead;
+                                    int humidityIndex = receivedData.indexOf("Humidity");
+                                    int temperatureIndex = receivedData.indexOf("Temperature");
 
+                                    if (humidityIndex != -1 && temperatureIndex != -1) {
+                                        String humiditySubstring = receivedData.substring(humidityIndex + 10, receivedData.indexOf("%", humidityIndex));
+                                        String temperatureSubstring = receivedData.substring(temperatureIndex + 12, receivedData.indexOf("°C", temperatureIndex));
+
+                                        float humidityValue = Float.parseFloat(humiditySubstring);
+                                        float temperatureValue = Float.parseFloat(temperatureSubstring);
+
+                                        // Ahora muestra estos valores en tus TextViews (sustituye con tus identificadores de TextView)
+                                        TextView humidityTextView = findViewById(R.id.humidityTextView);
+                                        TextView temperatureTextView = findViewById(R.id.temperatureTextView);
+
+                                        humidityTextView.setText("Humedad: " + humidityValue + "%");
+                                        temperatureTextView.setText("Temperatura: " + temperatureValue + "°C");
+                                    }
+                                });
+                    }
                 }
             }
         });
@@ -155,18 +178,10 @@ public class MainActivity extends AppCompatActivity {
                         Log.d(TAG, "Bluetooth is disabled");
                         Intent enableBtIntent = new Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE);
                         if (ActivityCompat.checkSelfPermission(getApplicationContext(), Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
-                            // TODO: Consider calling
-                            //    ActivityCompat#requestPermissions
-                            // here to request the missing permissions, and then overriding
-                            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                            //                                          int[] grantResults)
-                            // to handle the case where the user grants the permission. See the documentation
-                            // for ActivityCompat#requestPermissions for more details.
-                            Log.d(TAG, "We don't BT Permissions");
-                            startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
-                            Log.d(TAG, "Bluetooth is enabled now");
+                            // Request the BLUETOOTH_CONNECT permission here
+                            ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.BLUETOOTH_CONNECT}, REQUEST_ENABLE_BT);
                         } else {
-                            Log.d(TAG, "We have BT Permissions");
+                            // Bluetooth permission is already granted
                             startActivityForResult(enableBtIntent, REQUEST_ENABLE_BT);
                             Log.d(TAG, "Bluetooth is enabled now");
                         }
@@ -189,7 +204,7 @@ public class MainActivity extends AppCompatActivity {
                             //If we find the HC 05 device (the Arduino BT module)
                             //We assign the device value to the Global variable BluetoothDevice
                             //We enable the button "Connect to HC 05 device"
-                            if (deviceName.equals("HC-05")) {
+                            if (deviceName.equals("BT04-A")) {
                                 Log.d(TAG, "HC-05 found");
                                 arduinoUUID = device.getUuids()[0].getUuid();
                                 arduinoBTModule = device;
